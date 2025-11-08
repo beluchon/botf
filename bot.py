@@ -11,17 +11,15 @@ from logging.handlers import RotatingFileHandler
 import sys
 from datetime import datetime
 
-# ✅ CRÉER LE DOSSIER DE LOGS AVANT TOUTE CHOSE
-log_dir = "/app/logs"
-os.makedirs(log_dir, exist_ok=True)
-os.chmod(log_dir, 0o755)  # Donner les permissions
+# ✅ SOLUTION : Utiliser /tmp qui a toujours les permissions
+log_file_path = "/tmp/telegram_bot.log"
 
 # Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
     handlers=[
         RotatingFileHandler(
-            "/app/logs/telegram_bot.log",
+            log_file_path,
             maxBytes=10485760,  # 10MB
             backupCount=5
         ),
@@ -135,4 +133,3 @@ if __name__ == '__main__':
             logger.error(f"Erreur dans la boucle principale: {e}")
             logger.info("Redémarrage dans 60 secondes...")
             asyncio.sleep(60)
-

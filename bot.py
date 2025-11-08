@@ -1,5 +1,3 @@
-
-
 # bot.py
 import os
 import uuid
@@ -137,3 +135,4 @@ if __name__ == '__main__':
             logger.error(f"Erreur dans la boucle principale: {e}")
             logger.info("Redémarrage dans 60 secondes...")
             asyncio.sleep(60)
+

@@ -1,0 +1,18 @@
+telegram-bot:
+    image: ghcr.io/beluchon/botf:main
+    container_name: telegram-bot
+    restart: unless-stopped
+    ports:
+      - 52707:52707
+    environment:
+      - TELEGRAM_TOKEN=8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8
+      - POSTGRES_DB=zilean
+      - POSTGRES_USER=stremio
+      - POSTGRES_PASSWORD=stremio
+      - POSTGRES_HOST=stremio-postgres
+      - POSTGRES_PORT=5432
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - stremio-postgres
+      - stremio-redis

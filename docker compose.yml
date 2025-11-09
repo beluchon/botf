@@ -5,7 +5,7 @@ telegram-bot:
     ports:
       - 52707:52707
     environment:
-      - TELEGRAM_TOKEN=8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8
+      - TELEGRAM_TOKEN=
       - POSTGRES_DB=zilean
       - POSTGRES_USER=stremio
       - POSTGRES_PASSWORD=stremio

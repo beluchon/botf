@@ -28,6 +28,11 @@ async def create_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         key_name = " ".join(context.args)
         
+        # Debug
+        url = f"{API_BASE_URL}/new"
+        print(f"🔍 Tentative connexion à: {url}")
+        print(f"🔍 Paramètres: name={key_name}, never_expires=true")
+        
         # Appel API pour créer la clé
         response = requests.post(
             f"{API_BASE_URL}/new",

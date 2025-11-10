@@ -1,5 +1,6 @@
 import requests
 import asyncio
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -15,6 +16,11 @@ API_LIST_ENDPOINT = "/api/auth/list"
 SECRET_KEY = os.getenv("SECRET_KEY", ".")
 
 
+def generate_unique_name(base_name: str) -> str:
+    """Génère un nom unique en ajoutant un timestamp"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{base_name}_{timestamp}"
+
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère les clics sur les boutons"""
@@ -22,13 +28,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "create_token":
-        await create_token(query, context, name="token_auto")
+        # Génère un nom unique automatiquement
+        unique_name = generate_unique_name("token_auto")
+        await create_token(query, context, name=unique_name)
     
     elif query.data == "create_custom":
         await query.edit_message_text(
             "📝 Pour créer un token personnalisé, utilisez la commande :\n\n"
             "`/token <nom>`\n\n"
-            "Exemple : `/token mon_application`",
+            "Exemple : `/token mon_application`\n\n"
+            "⚡ Un timestamp sera automatiquement ajouté pour garantir l'unicité !",
             parse_mode="Markdown"
         )
     
@@ -40,6 +49,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📖 *Guide d'utilisation*\n\n"
             "🔹 `/start` - Afficher le menu principal\n"
             "🔹 `/token <nom>` - Créer un token avec un nom personnalisé\n\n"
+            "💡 *Important :* Un timestamp est automatiquement ajouté à chaque nom "
+            "pour éviter les doublons. Exemple :\n"
+            "• `/token test` → `test_20241110_153045`\n\n"
             "Les tokens créés n'expirent jamais par défaut.\n\n"
             "🔒 Vos tokens sont précieux, gardez-les en sécurité !"
         )
@@ -82,7 +94,7 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
             
             message = (
                 f"✅ *Token créé avec succès !*\n\n"
-                f"📝 Nom : `{name}`\n"
+                f"📛 Nom : `{name}`\n"
                 f"🔑 Token : `{token}`\n\n"
                 f"⏰ Expiration : Jamais\n\n"
                 f"⚠️ Copiez ce token maintenant, vous ne pourrez plus le récupérer !"
@@ -140,7 +152,7 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                     # Envoyer un nouveau message avec les détails de la clé
                     key_info = (
                         f"📋 *Détails de la dernière clé créée :*\n\n"
-                        f"📝 Nom : `{last_key.get('name', 'N/A')}`\n"
+                        f"📛 Nom : `{last_key.get('name', 'N/A')}`\n"
                         f"🆔 ID : `{last_key.get('id', 'N/A')}`\n"
                         f"🔑 API Key : `{last_key.get('api_key', 'N/A')}`\n"
                         f"📅 Créée le : `{last_key.get('created_at', 'N/A')}`\n"
@@ -199,9 +211,10 @@ async def test_api_connection(query):
     try:
         url = f"{API_BASE_URL}{API_ENDPOINT}"
         # Test avec un vrai appel POST comme l'API l'attend
+        test_name = generate_unique_name("test_connection")
         response = requests.post(
             url,
-            params={"name": "test_connection", "never_expires": "true"},
+            params={"name": test_name, "never_expires": "true"},
             headers={"secret-key": SECRET_KEY},
             timeout=5
         )
@@ -242,13 +255,32 @@ async def token_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(
             "❌ Veuillez spécifier un nom pour le token.\n\n"
-            "Exemple : `/token mon_application`",
+            "Exemple : `/token mon_application`\n\n"
+            "💡 Un timestamp sera automatiquement ajouté pour garantir l'unicité !",
             parse_mode="Markdown"
         )
         return
     
-    token_name = " ".join(context.args)
-    await create_token(update, context, name=token_name)
+    base_name = " ".join(context.args)
+    # Génère un nom unique
+    unique_name = generate_unique_name(base_name)
+    await create_token(update, context, name=unique_name)
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /start pour afficher le menu principal"""
+    keyboard = [
+        [InlineKeyboardButton("🔑 Créer un nouveau token", callback_data="create_token")],
+        [InlineKeyboardButton("📋 Créer token personnalisé", callback_data="create_custom")],
+        [InlineKeyboardButton("🔍 Tester la connexion API", callback_data="test_api")],
+        [InlineKeyboardButton("ℹ️ Aide", callback_data="help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    message = (
+        "🤖 *Bot d'Authentification*\n\n"
+        "Bienvenue ! Je peux créer des tokens d'authentification pour vous.\n\n"
+        "Choisissez une option ci-dessous :"
+    )
+    await update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
 
 def main():
     """Point d'entrée principal du bot"""
@@ -256,6 +288,7 @@ def main():
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Ajouter les handlers
+    application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("token", token_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     

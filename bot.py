@@ -38,7 +38,8 @@ class StreamFusionAPI:
                     response = requests.get(endpoint, timeout=5)
                     results[endpoint] = {
                         "status": response.status_code,
-                        "reachable": True
+                        "reachable": True,
+                        "content": response.text[:100] if response.text else "No content"
                     }
                 except Exception as e:
                     results[endpoint] = {
@@ -64,32 +65,76 @@ class StreamFusionAPI:
             
             for url in possible_urls:
                 try:
+                    print(f"🔧 Tentative avec l'URL: {url}")
+                    
                     headers = {
                         "secret-key": API_CONFIG['secret_key'],
                         "Content-Type": "application/json"
                     }
-                    
-                    # Essayer avec params
-                    params = {
-                        "name": username,
-                        "never_expires": "true"
-                    }
-                    response = requests.post(url, headers=headers, params=params, timeout=10)
-                    
-                    if response.status_code == 200:
-                        return {"success": True, "data": response.json(), "url": url}
                     
                     # Essayer avec body JSON
                     data = {
                         "name": username,
                         "never_expires": True
                     }
+                    
+                    print(f"📤 Envoi des données: {data}")
+                    print(f"🔑 Secret key utilisée: {API_CONFIG['secret_key'][:10]}...")
+                    
                     response = requests.post(url, headers=headers, json=data, timeout=10)
                     
-                    if response.status_code == 200:
-                        return {"success": True, "data": response.json(), "url": url}
+                    print(f"📥 Réponse reçue - Status: {response.status_code}")
+                    print(f"📄 Contenu de la réponse: {response.text[:200]}...")
                     
-                except Exception:
+                    if response.status_code == 200:
+                        try:
+                            response_data = response.json()
+                            print(f"✅ JSON parsé: {response_data}")
+                            return {
+                                "success": True, 
+                                "data": response_data, 
+                                "url": url,
+                                "raw_response": response.text
+                            }
+                        except json.JSONDecodeError as e:
+                            print(f"❌ Erreur JSON: {e}")
+                            return {
+                                "success": False,
+                                "error": f"Erreur JSON: {str(e)}",
+                                "raw_response": response.text
+                            }
+                    
+                    # Essayer avec params si JSON échoue
+                    params = {
+                        "name": username,
+                        "never_expires": "true"
+                    }
+                    response = requests.post(url, headers=headers, params=params, timeout=10)
+                    
+                    print(f"📥 Réponse (params) - Status: {response.status_code}")
+                    print(f"📄 Contenu (params): {response.text[:200]}...")
+                    
+                    if response.status_code == 200:
+                        try:
+                            response_data = response.json()
+                            return {
+                                "success": True, 
+                                "data": response_data, 
+                                "url": url,
+                                "raw_response": response.text
+                            }
+                        except json.JSONDecodeError as e:
+                            return {
+                                "success": False,
+                                "error": f"Erreur JSON: {str(e)}",
+                                "raw_response": response.text
+                            }
+                            
+                except requests.exceptions.RequestException as e:
+                    print(f"❌ Erreur requête pour {url}: {e}")
+                    continue
+                except Exception as e:
+                    print(f"❌ Erreur inattendue pour {url}: {e}")
                     continue
             
             return {
@@ -99,6 +144,7 @@ class StreamFusionAPI:
             }
                 
         except Exception as e:
+            print(f"💥 Erreur globale: {e}")
             return {"success": False, "error": str(e)}
     
     @staticmethod
@@ -116,16 +162,24 @@ class StreamFusionAPI:
                     headers = {"secret-key": API_CONFIG['secret_key']}
                     params = {"name": username}
                     
+                    print(f"🔍 Liste des clés - URL: {url}, User: {username}")
+                    
                     response = requests.get(url, headers=headers, params=params, timeout=10)
                     
+                    print(f"📥 Réponse liste - Status: {response.status_code}")
+                    
                     if response.status_code == 200:
-                        return response.json()
-                except Exception:
+                        keys_data = response.json()
+                        print(f"✅ Clés trouvées: {keys_data}")
+                        return keys_data
+                except Exception as e:
+                    print(f"❌ Erreur liste clés pour {url}: {e}")
                     continue
             
             return None
                 
-        except Exception:
+        except Exception as e:
+            print(f"💥 Erreur globale liste clés: {e}")
             return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -189,7 +243,8 @@ async def test_connection(query) -> None:
                 status = result.get("status")
                 emoji = "✅" if status == 200 else "⚠️"
                 message += f"{emoji} {endpoint}\n"
-                message += f"   Status: {status}\n\n"
+                message += f"   Status: {status}\n"
+                message += f"   Content: {result.get('content', 'N/A')}\n\n"
             else:
                 message += f"❌ {endpoint}\n"
                 message += f"   Erreur: {result.get('error', 'N/A')[:50]}\n\n"
@@ -211,13 +266,30 @@ async def generate_key(query) -> None:
     
     result = StreamFusionAPI.generate_key(username)
     
+    print(f"🎯 Résultat de génération: {result}")
+    
     if result and result.get('success'):
         keyboard = [[InlineKeyboardButton("◀️ Retour au menu", callback_data="back_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         data = result.get('data', {})
-        api_key = data.get('api_key') or data.get('key') or data.get('apiKey', 'N/A')
-        created_at = data.get('created_at') or data.get('createdAt', 'N/A')
+        
+        # Extraire la clé API de différentes manières possibles
+        api_key = None
+        possible_key_fields = ['api_key', 'key', 'apiKey', 'token', 'access_token', 'apikey']
+        
+        for field in possible_key_fields:
+            if field in data:
+                api_key = data[field]
+                print(f"✅ Clé trouvée dans le champ '{field}': {api_key}")
+                break
+        
+        if not api_key:
+            # Si aucun champ standard ne contient la clé, afficher tout le JSON pour débogage
+            print(f"🔍 Aucun champ standard trouvé. Données complètes: {data}")
+            api_key = "NON_TROUVÉE - Voir les logs"
+        
+        created_at = data.get('created_at') or data.get('createdAt') or data.get('timestamp', 'N/A')
         
         message = (
             "✅ *Clé API générée avec succès !*\n\n"
@@ -225,11 +297,14 @@ async def generate_key(query) -> None:
             f"👤 Utilisateur : {username}\n"
             f"📊 Requêtes : Illimitées\n"
             f"⏰ Expiration : Jamais\n"
-            f"📅 Créée le : {created_at}\n"
-            f"🔗 Endpoint : {result.get('url', 'N/A')}\n\n"
+            f"📅 Créée le : {created_at}\n\n"
             "⚠️ *Conservez cette clé en sécurité !*\n\n"
             "🔗 Utilisez cette clé pour configurer votre addon Stremio avec StreamFusion."
         )
+        
+        # Ajouter des informations de débogage si nécessaire
+        if api_key == "NON_TROUVÉE - Voir les logs":
+            message += f"\n\n🔧 *Debug Info:*\n```{json.dumps(data, indent=2)}```"
         
         await query.edit_message_text(
             message,
@@ -245,12 +320,16 @@ async def generate_key(query) -> None:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         error_msg = result.get('error', 'Erreur inconnue') if result else "Pas de réponse"
+        raw_response = result.get('raw_response', 'N/A')
         tried_urls = result.get('tried_urls', []) if result else []
         
         message = (
             "❌ *Erreur lors de la génération*\n\n"
             f"Erreur : `{error_msg}`\n\n"
         )
+        
+        if raw_response and raw_response != 'N/A':
+            message += f"📄 Réponse brute : `{raw_response[:100]}...`\n\n"
         
         if tried_urls:
             message += "URLs testées :\n"
@@ -280,6 +359,8 @@ async def list_user_keys(query) -> None:
     
     keys = StreamFusionAPI.list_keys(username)
     
+    print(f"🔑 Clés récupérées pour {username}: {keys}")
+    
     if keys and len(keys) > 0:
         message = f"📊 *Vos clés API StreamFusion*\n\n"
         message += f"Total : {len(keys)} clé(s)\n\n"
@@ -287,12 +368,23 @@ async def list_user_keys(query) -> None:
         keyboard = []
         
         for i, key_info in enumerate(keys[:5], 1):
-            api_key = key_info.get('api_key') or key_info.get('key', 'N/A')
-            created = key_info.get('created_at') or key_info.get('createdAt', 'N/A')
+            # Extraire la clé de différentes manières
+            api_key = None
+            possible_key_fields = ['api_key', 'key', 'apiKey', 'token', 'access_token', 'apikey']
+            
+            for field in possible_key_fields:
+                if field in key_info:
+                    api_key = key_info[field]
+                    break
+            
+            if not api_key:
+                api_key = "NON_TROUVÉE"
+            
+            created = key_info.get('created_at') or key_info.get('createdAt') or key_info.get('timestamp', 'N/A')
             is_active = key_info.get('is_active', True)
             
             status = "🟢" if is_active else "🔴"
-            short_key = f"{api_key[:8]}...{api_key[-8:]}" if len(api_key) > 16 else api_key
+            short_key = f"{api_key[:8]}...{api_key[-8:]}" if len(api_key) > 16 and api_key != "NON_TROUVÉE" else api_key
             
             message += f"{i}. {status} `{short_key}`\n"
             message += f"   📅 {created}\n\n"
@@ -371,16 +463,34 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     
     result = StreamFusionAPI.generate_key(username)
     
+    print(f"🎯 Résultat de génération (commande): {result}")
+    
     if result and result.get('success'):
         data = result.get('data', {})
-        api_key = data.get('api_key') or data.get('key') or data.get('apiKey', 'N/A')
-        await msg.edit_text(
-            f"✅ *Clé générée !*\n\n🔑 `{api_key}`\n\n⚠️ Conservez-la en sécurité !",
-            parse_mode='Markdown'
-        )
+        
+        # Extraire la clé API de différentes manières possibles
+        api_key = None
+        possible_key_fields = ['api_key', 'key', 'apiKey', 'token', 'access_token', 'apikey']
+        
+        for field in possible_key_fields:
+            if field in data:
+                api_key = data[field]
+                break
+        
+        if api_key:
+            await msg.edit_text(
+                f"✅ *Clé générée !*\n\n🔑 `{api_key}`\n\n⚠️ Conservez-la en sécurité !",
+                parse_mode='Markdown'
+            )
+        else:
+            await msg.edit_text(
+                f"❌ Clé générée mais format inattendu.\n\nDonnées reçues: ```{json.dumps(data, indent=2)}```",
+                parse_mode='Markdown'
+            )
     else:
+        error_msg = result.get('error', 'Erreur inconnue') if result else "Pas de réponse"
         await msg.edit_text(
-            "❌ Erreur de génération.\n\nUtilisez /test pour diagnostiquer le problème."
+            f"❌ Erreur de génération: {error_msg}\n\nUtilisez /test pour diagnostiquer le problème."
         )
 
 async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -397,7 +507,15 @@ async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     else:
         working = sum(1 for r in results.values() if r.get('reachable'))
         message += f"Endpoints testés : {len(results)}\n"
-        message += f"Fonctionnels : {working}\n"
+        message += f"Fonctionnels : {working}\n\n"
+        
+        for endpoint, result in results.items():
+            if result.get('reachable'):
+                status = result.get('status')
+                emoji = "✅" if status == 200 else "⚠️"
+                message += f"{emoji} {endpoint}\n"
+            else:
+                message += f"❌ {endpoint}\n"
     
     await msg.edit_text(message, parse_mode='Markdown')
 
@@ -449,12 +567,17 @@ async def main() -> None:
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CallbackQueryHandler(button_handler))
         
+        print("🤖 Bot StreamFusion démarré...")
+        print(f"🔗 URL API: {API_CONFIG['base_url']}")
+        print(f"🔑 Secret Key: {API_CONFIG['secret_key'][:10]}...")
+        
         await application.run_polling(
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=True
         )
 
-    except Exception:
+    except Exception as e:
+        print(f"💥 Erreur critique: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':
@@ -462,6 +585,8 @@ if __name__ == '__main__':
         try:
             asyncio.run(main())
         except KeyboardInterrupt:
+            print("👋 Arrêt du bot...")
             break
-        except Exception:
+        except Exception as e:
+            print(f"💥 Erreur redémarrage: {e}")
             time.sleep(60)

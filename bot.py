@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # Configuration
-TELEGRAM_BOT_TOKEN = "VOTRE_TOKEN_BOT_TELEGRAM"
+TELEGRAM_BOT_TOKEN = "8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8"
 
 # Configuration pour Docker (le bot accède à l'API sur l'hôte)
 API_BASE_URL = "http://172.17.0.1:8082"  # IP du Docker bridge pour accéder à l'hôte Linux
@@ -279,3 +279,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

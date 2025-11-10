@@ -153,11 +153,12 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                     
                     # Envoyer un nouveau message avec les détails de la clé
                     key_info = (
-                        f"🔍 *Détails de la dernière clé créée :*\n\n"
+                        f"📋 *Détails de la dernière clé créée :*\n\n"
                         f"📝 Nom : `{last_key.get('name', 'N/A')}`\n"
                         f"🆔 ID : `{last_key.get('id', 'N/A')}`\n"
+                        f"🔑 API Key : `{last_key.get('api_key', 'N/A')}`\n"
                         f"📅 Créée le : `{last_key.get('created_at', 'N/A')}`\n"
-                        f"⏰ Expire : `{last_key.get('expires_at', 'Jamais')}`\n"
+                        f"⏰ Expire : `{last_key.get('expires_at') or 'Jamais'}`\n"
                     )
                     
                     keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
@@ -279,4 +280,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -1,9 +1,9 @@
 import requests
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Configuration
-BOT_TOKEN = "TON_TOKEN_TELEGRAM_ICI"
+BOT_TOKEN = "8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8"
 API_URL_NEW = "http://localhost:8082/api/auth/new"
 API_URL_LIST = "http://localhost:8082/api/auth/list"
 API_SECRET_KEY = "testuu"
@@ -34,23 +34,21 @@ def get_latest_api_key():
     except Exception as e:
         return f"Erreur : {str(e)}"
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     api_key = create_api_key()
-    update.effective_message.reply_text(f"Voici ta nouvelle clé API :\n`{api_key}`", parse_mode="Markdown")
+    await update.effective_message.reply_text(f"Voici ta nouvelle clé API :\n`{api_key}`", parse_mode="Markdown")
 
-def latest(update: Update, context: CallbackContext):
+async def latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     latest_key = get_latest_api_key()
-    update.effective_message.reply_text(f"Dernière clé API :\n`{latest_key}`", parse_mode="Markdown")
+    await update.effective_message.reply_text(f"Dernière clé API :\n`{latest_key}`", parse_mode="Markdown")
 
 def main():
-    updater = Updater(BOT_TOKEN)
-    dispatcher = updater.dispatcher
+    app = Application.builder().token(BOT_TOKEN).build()
 
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("latest", latest))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("latest", latest))
 
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()

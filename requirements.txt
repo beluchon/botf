@@ -2,3 +2,4 @@ python-telegram-bot==20.7
 psycopg2-binary==2.9.7
 nest-asyncio==1.5.8
 uuid==1.30
+Flask==3.0.0

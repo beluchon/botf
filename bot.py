@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # Configuration
-TELEGRAM_BOT_TOKEN = "8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8"
+TELEGRAM_BOT_TOKEN = "VOTRE_TOKEN_BOT_TELEGRAM"
 
 # Configuration pour Docker (le bot accède à l'API sur l'hôte)
 API_BASE_URL = "http://172.17.0.1:8082"  # IP du Docker bridge pour accéder à l'hôte Linux
@@ -120,6 +120,16 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                 await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
             else:
                 await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
+                
+    except Exception as e:
+        error_message = f"❌ *Erreur de connexion*\n\n{str(e)}"
+        keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if isinstance(query_or_update, Update):
+            await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
+        else:
+            await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def test_api_connection(query):
     """Teste la connexion à l'API"""
@@ -163,16 +173,6 @@ async def test_api_connection(query):
     keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
-                
-    except Exception as e:
-        error_message = f"❌ *Erreur de connexion*\n\n{str(e)}"
-        keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        if isinstance(query_or_update, Update):
-            await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
-        else:
-            await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def token_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /token <nom> pour créer un token personnalisé"""

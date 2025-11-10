@@ -1,197 +1,262 @@
-# bot.py
 import os
-import uuid
-import psycopg2
+import logging
 import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import asyncio
-import nest_asyncio
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Appliquer nest_asyncio
-nest_asyncio.apply()
+# Configuration du logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler('/app/logs/bot.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# Configuration de la base de données
-DB_CONFIG = {
-    "dbname": os.getenv("POSTGRES_DB", "streamfusion"),
-    "user": os.getenv("POSTGRES_USER", "postgres"),
-    "password": os.getenv("POSTGRES_PASSWORD", "postgres"),
-    "host": os.getenv("POSTGRES_HOST", "host.docker.internal"),
-    "port": os.getenv("POSTGRES_PORT", "5432")
+# Récupération des variables d'environnement
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+API_BASE_URL = os.getenv('API_BASE_URL')
+SECRET_KEY = os.getenv('SECRET_KEY')
+
+# Validation des variables obligatoires
+required_vars = {
+    'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
+    'API_BASE_URL': API_BASE_URL,
+    'SECRET_KEY': SECRET_KEY
 }
 
-# Configuration de l'API
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8082")
-SECRET_KEY = os.getenv("SECRET_KEY", "testuu")
+missing_vars = [var for var, value in required_vars.items() if not value]
+if missing_vars:
+    logger.error(f"Variables manquantes: {', '.join(missing_vars)}")
+    exit(1)
 
-def connect_db():
-    try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        return conn
-    except Exception:
-        return None
+logger.info("🤖 FatherBot initialisation...")
+logger.info(f"API Base URL: {API_BASE_URL}")
 
-async def generate_api_key_via_api(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Génère une clé API via l'endpoint API"""
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la commande /start"""
+    welcome_text = """
+🤖 **FatherBot - Générateur d'API Key**
+
+Commandes disponibles:
+/start - Afficher ce message
+/generate - Générer une nouvelle API key
+/list - Lister les API keys existantes
+/help - Aide
+
+Envoyez "generate nom_utilisateur" pour créer une API key personnalisée.
+    """
+    await update.message.reply_text(welcome_text, parse_mode='Markdown')
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la commande /help"""
+    help_text = """
+📖 **Aide FatherBot**
+
+Ce bot permet de générer et gérer les API keys pour votre application.
+
+**Commandes:**
+- `/generate` - Génère une API key avec un nom par défaut
+- `/generate <nom>` - Génère une API key avec un nom spécifique
+- `/list` - Liste les API keys existantes
+- `/help` - Affiche cette aide
+
+**Exemples:**
+`generate mon_app`
+`generate utilisateur_test`
+    """
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+async def generate_api_key(update: Update, context: ContextTypes.DEFAULT_TYPE, username="telegram_user"):
+    """Fonction pour générer une API key"""
     try:
-        user_name = update.message.from_user.username or f"user_{update.message.from_user.id}"
+        # Construction de l'URL complète
+        api_url = f"{API_BASE_URL}/api/auth/new"
         
-        # Préparer les paramètres
+        # Paramètres de la requête
         params = {
-            "name": user_name,
-            "never_expires": "true"
+            'name': username,
+            'never_expires': 'true'
         }
         
         headers = {
-            "secret-key": SECRET_KEY
+            'secret-key': SECRET_KEY
         }
         
-        # Faire l'appel API
-        response = requests.post(
-            f"{API_BASE_URL}/api/auth/new",
-            params=params,
-            headers=headers,
-            timeout=30
-        )
+        logger.info(f"🔑 Génération API key pour: {username}")
+        logger.info(f"🌐 URL: {api_url}")
+        
+        # Envoi de la requête POST
+        response = requests.post(api_url, params=params, headers=headers, timeout=30)
+        
+        logger.info(f"📡 Réponse API: {response.status_code}")
         
         if response.status_code == 200:
-            api_key_data = response.json()
-            api_key = api_key_data.get("api_key", "Clé non retournée")
+            # Récupération de l'API key depuis la réponse
+            api_data = response.json()
+            api_key = api_data.get('key', 'Clé non trouvée dans la réponse')
             
-            # Sauvegarder dans la base de données
-            await save_api_key_to_db(api_key, user_name)
+            success_message = f"""
+✅ **API Key générée avec succès!**
+
+👤 **Utilisateur:** `{username}`
+🔑 **API Key:** `{api_key}`
+
+⚠️ **Important:** Gardez cette clé en sécurité et ne la partagez pas!
+            """
+            await update.message.reply_text(success_message, parse_mode='Markdown')
             
-            confirmation_message = (
-                f"✅ Clé API générée avec succès via l'API !\n\n"
-                f"🔑 Votre clé : `{api_key}`\n"
-                f"👤 Utilisateur : {user_name}\n"
-                f"📊 Requêtes : Illimitées\n"
-                f"⏰ Expiration : Jamais\n\n"
-                f"⚠️ **Gardez cette clé secrète !**"
-            )
-            await update.message.reply_text(confirmation_message, parse_mode='Markdown')
+            # Log pour le débogage
+            logger.info(f"✅ API key générée pour {username}")
+            
+        elif response.status_code == 400:
+            error_data = response.json()
+            error_message = f"""
+❌ **Erreur lors de la génération**
+
+L'utilisateur `{username}` existe déjà ou la requête est invalide.
+
+Détail: {error_data.get('error', 'Erreur inconnue')}
+            """
+            await update.message.reply_text(error_message, parse_mode='Markdown')
             
         else:
-            await update.message.reply_text("❌ Erreur lors de la génération via l'API. Utilisation de la méthode de secours...")
-            await generate_api_key_fallback(update, context)
-            
-    except requests.exceptions.RequestException:
-        await update.message.reply_text("❌ Impossible de contacter l'API. Utilisation de la méthode de secours...")
-        await generate_api_key_fallback(update, context)
-    except Exception:
-        await update.message.reply_text("❌ Erreur lors de la génération de la clé API.")
+            error_message = f"""
+❌ **Erreur API**
 
-async def generate_api_key_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Méthode de secours pour générer une clé API directement dans la base de données"""
+Code: {response.status_code}
+Message: {response.text}
+
+Vérifiez que l'API est accessible à: {API_BASE_URL}
+            """
+            await update.message.reply_text(error_message)
+            logger.error(f"Erreur API: {response.status_code} - {response.text}")
+            
+    except requests.exceptions.ConnectionError:
+        error_message = f"""
+❌ **Erreur de connexion**
+
+Impossible de se connecter à l'API à l'adresse:
+`{API_BASE_URL}`
+
+Vérifiez que:
+• L'API est démarrée
+• L'URL est correcte
+• Le réseau est accessible
+        """
+        await update.message.reply_text(error_message, parse_mode='Markdown')
+        logger.error(f"Connexion impossible à: {API_BASE_URL}")
+        
+    except requests.exceptions.Timeout:
+        error_message = """
+❌ **Timeout**
+
+L'API n'a pas répondu dans le temps imparti.
+Veuillez réessayer plus tard.
+        """
+        await update.message.reply_text(error_message)
+        logger.error("Timeout de l'API")
+        
+    except Exception as e:
+        error_message = f"""
+❌ **Erreur inattendue**
+
+{str(e)}
+        """
+        await update.message.reply_text(error_message)
+        logger.error(f"Erreur inattendue: {e}")
+
+async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la commande /generate avec ou sans argument"""
+    if context.args:
+        username = ' '.join(context.args)
+        await generate_api_key(update, context, username)
+    else:
+        await generate_api_key(update, context, "telegram_user")
+
+async def list_keys_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la commande /list pour lister les clés existantes"""
     try:
-        conn = connect_db()
-        if not conn:
-            await update.message.reply_text("❌ Impossible de se connecter à la base de données.")
-            return
-
-        api_key = str(uuid.uuid4())
-        is_active = True
-        never_expire = True
-        total_queries = -1
-        name = update.message.from_user.username or f"user_{update.message.from_user.id}"
-
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO api_keys (api_key, is_active, never_expire, total_queries, name, created_at)
-                VALUES (uuid(%s), %s, %s, %s, %s, NOW())
-                RETURNING api_key
-                """,
-                (api_key, is_active, never_expire, total_queries, name)
-            )
-            returned_key = cur.fetchone()[0]
-            conn.commit()
+        # Cette endpoint peut varier selon votre API
+        list_url = f"{API_BASE_URL}/api/auth/keys"
+        headers = {'secret-key': SECRET_KEY}
+        
+        response = requests.get(list_url, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            keys_data = response.json()
+            if keys_data:
+                keys_list = "\n".join([f"• {key.get('name', 'Sans nom')}: `{key.get('key', 'N/A')}`" 
+                                     for key in keys_data])
+                message = f"🔑 **Clés API existantes:**\n\n{keys_list}"
+            else:
+                message = "📭 Aucune clé API trouvée."
+                
+            await update.message.reply_text(message, parse_mode='Markdown')
+        else:
+            await update.message.reply_text("❌ Impossible de récupérer la liste des clés.")
             
-            confirmation_message = (
-                f"✅ Clé API générée avec succès (mode secours) !\n\n"
-                f"🔑 Votre clé : `{returned_key}`\n"
-                f"👤 Utilisateur : {name}\n"
-                f"📊 Requêtes : Illimitées\n"
-                f"⏰ Expiration : Jamais\n\n"
-                f"⚠️ **Gardez cette clé secrète !**"
-            )
-            await update.message.reply_text(confirmation_message, parse_mode='Markdown')
-            
-    except Exception:
-        await update.message.reply_text("❌ Échec de la génération de clé API.")
-    finally:
-        if conn:
-            conn.close()
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erreur: {str(e)}")
+        logger.error(f"Erreur liste clés: {e}")
 
-async def save_api_key_to_db(api_key: str, user_name: str) -> None:
-    """Sauvegarde la clé API dans la base de données"""
-    try:
-        conn = connect_db()
-        if not conn:
-            return
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère les messages texte"""
+    text = update.message.text.strip()
+    
+    if text.lower().startswith('generate'):
+        parts = text.split(' ', 1)
+        username = parts[1] if len(parts) > 1 else "telegram_user"
+        await generate_api_key(update, context, username)
+    else:
+        await update.message.reply_text(
+            "Envoyez 'generate' pour créer une API key, ou /help pour l'aide."
+        )
 
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO api_keys (api_key, is_active, never_expire, total_queries, name, created_at, source)
-                VALUES (%s, %s, %s, %s, %s, NOW(), %s)
-                """,
-                (api_key, True, True, -1, user_name, 'telegram_bot_api')
-            )
-            conn.commit()
-            
-    except Exception:
-        pass
-    finally:
-        if conn:
-            conn.close()
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère les erreurs"""
+    logger.error(f"Erreur: {context.error}")
+    
+    if update and update.message:
+        await update.message.reply_text(
+            "❌ Une erreur s'est produite. Veuillez réessayer."
+        )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Commande de démarrage du bot"""
-    welcome_message = (
-        "👋 Bienvenue sur le générateur de clés API !\n\n"
-        "Commandes disponibles:\n"
-        "✅ /generate - Générer une nouvelle clé API\n"
-        "ℹ️  /help - Afficher cette aide\n\n"
-        "Votre clé API vous permettra d'accéder à l'API StreamFusion avec des requêtes illimitées et sans expiration."
-    )
-    await update.message.reply_text(welcome_message)
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Commande d'aide"""
-    help_message = (
-        "🤖 **Générateur de Clés API**\n\n"
-        "🔑 **Générer une clé:**\n"
-        "Utilisez `/generate` pour créer une nouvelle clé API\n\n"
-        "⚡ **Caractéristiques:**\n"
-        "• Requêtes illimitées\n"
-        "• Pas d'expiration\n"
-        "• Accès complet à l'API\n\n"
-        "🔒 **Sécurité:**\n"
-        "• Gardez votre clé secrète\n"
-        "• Ne la partagez pas\n"
-        "• Stockez-la en sécurité"
-    )
-    await update.message.reply_text(help_message, parse_mode='Markdown')
-
-async def main() -> None:
+def main():
     """Fonction principale"""
     try:
-        token = os.getenv("TELEGRAM_TOKEN")
-        if not token:
-            return
-            
-        application = ApplicationBuilder().token(token).build()
+        # Création de l'application
+        application = Application.builder().token(TELEGRAM_TOKEN).build()
         
-        # Ajouter les handlers
-        application.add_handler(CommandHandler("start", start))
+        # Gestionnaires de commandes
+        application.add_handler(CommandHandler("start", start_command))
         application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("generate", generate_api_key_via_api))
+        application.add_handler(CommandHandler("generate", generate_command))
+        application.add_handler(CommandHandler("list", list_keys_command))
         
-        await application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-    except Exception:
-        pass
+        # Gestionnaire de messages
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        
+        # Gestionnaire d'erreurs
+        application.add_error_handler(error_handler)
+        
+        # Démarrage du bot
+        logger.info("🚀 FatherBot démarré avec succès!")
+        logger.info(f"📍 API Base: {API_BASE_URL}")
+        logger.info(f"🔐 Secret Key: {'*' * len(SECRET_KEY)}")
+        
+        print("=" * 50)
+        print("🤖 FatherBot est opérationnel!")
+        print("=" * 50)
+        
+        application.run_polling()
+        
+    except Exception as e:
+        logger.error(f"Erreur critique au démarrage: {e}")
+        exit(1)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()

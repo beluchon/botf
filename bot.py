@@ -7,6 +7,7 @@ import nest_asyncio
 import sys
 import time
 from typing import Optional
+import json
 
 # Appliquer nest_asyncio
 nest_asyncio.apply()
@@ -21,64 +22,118 @@ class StreamFusionAPI:
     """Classe pour interagir avec l'API StreamFusion"""
     
     @staticmethod
+    def test_connection() -> dict:
+        """Test la connexion à StreamFusion"""
+        try:
+            # Essayer différents endpoints possibles
+            endpoints = [
+                f"{API_CONFIG['base_url']}/health",
+                f"{API_CONFIG['base_url']}/",
+                f"{API_CONFIG['base_url']}/api/health"
+            ]
+            
+            results = {}
+            for endpoint in endpoints:
+                try:
+                    response = requests.get(endpoint, timeout=5)
+                    results[endpoint] = {
+                        "status": response.status_code,
+                        "reachable": True
+                    }
+                except Exception as e:
+                    results[endpoint] = {
+                        "status": None,
+                        "reachable": False,
+                        "error": str(e)
+                    }
+            
+            return results
+        except Exception as e:
+            return {"error": str(e)}
+    
+    @staticmethod
     def generate_key(username: str) -> Optional[dict]:
         """Génère une clé API via l'API StreamFusion"""
         try:
-            url = f"{API_CONFIG['base_url']}/api/auth/new"
-            headers = {"secret-key": API_CONFIG['secret_key']}
-            params = {
-                "name": username,
-                "never_expires": "true"
+            # Essayer différents formats d'URL
+            possible_urls = [
+                f"{API_CONFIG['base_url']}/api/auth/new",
+                f"{API_CONFIG['base_url']}/auth/new",
+                f"{API_CONFIG['base_url']}/api/v1/auth/new"
+            ]
+            
+            for url in possible_urls:
+                try:
+                    headers = {
+                        "secret-key": API_CONFIG['secret_key'],
+                        "Content-Type": "application/json"
+                    }
+                    
+                    # Essayer avec params
+                    params = {
+                        "name": username,
+                        "never_expires": "true"
+                    }
+                    response = requests.post(url, headers=headers, params=params, timeout=10)
+                    
+                    if response.status_code == 200:
+                        return {"success": True, "data": response.json(), "url": url}
+                    
+                    # Essayer avec body JSON
+                    data = {
+                        "name": username,
+                        "never_expires": True
+                    }
+                    response = requests.post(url, headers=headers, json=data, timeout=10)
+                    
+                    if response.status_code == 200:
+                        return {"success": True, "data": response.json(), "url": url}
+                    
+                except Exception:
+                    continue
+            
+            return {
+                "success": False,
+                "error": "Aucun endpoint ne fonctionne",
+                "tried_urls": possible_urls
             }
-            
-            response = requests.post(url, headers=headers, params=params, timeout=10)
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return None
                 
-        except Exception:
-            return None
+        except Exception as e:
+            return {"success": False, "error": str(e)}
     
     @staticmethod
     def list_keys(username: str) -> Optional[list]:
         """Liste les clés d'un utilisateur via l'API StreamFusion"""
         try:
-            url = f"{API_CONFIG['base_url']}/api/auth/keys"
-            headers = {"secret-key": API_CONFIG['secret_key']}
-            params = {"name": username}
+            possible_urls = [
+                f"{API_CONFIG['base_url']}/api/auth/keys",
+                f"{API_CONFIG['base_url']}/auth/keys",
+                f"{API_CONFIG['base_url']}/api/v1/auth/keys"
+            ]
             
-            response = requests.get(url, headers=headers, params=params, timeout=10)
+            for url in possible_urls:
+                try:
+                    headers = {"secret-key": API_CONFIG['secret_key']}
+                    params = {"name": username}
+                    
+                    response = requests.get(url, headers=headers, params=params, timeout=10)
+                    
+                    if response.status_code == 200:
+                        return response.json()
+                except Exception:
+                    continue
             
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return None
+            return None
                 
         except Exception:
             return None
-    
-    @staticmethod
-    def delete_key(api_key: str) -> bool:
-        """Supprime une clé API"""
-        try:
-            url = f"{API_CONFIG['base_url']}/api/auth/delete"
-            headers = {"secret-key": API_CONFIG['secret_key']}
-            params = {"api_key": api_key}
-            
-            response = requests.delete(url, headers=headers, params=params, timeout=10)
-            
-            return response.status_code == 200
-                
-        except Exception:
-            return False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Message de bienvenue avec menu interactif"""
     keyboard = [
         [InlineKeyboardButton("🔑 Générer une clé", callback_data="generate")],
         [InlineKeyboardButton("📊 Mes clés", callback_data="list_keys")],
+        [InlineKeyboardButton("🔧 Test connexion", callback_data="test")],
         [InlineKeyboardButton("❓ Aide", callback_data="help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -106,19 +161,47 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif query.data == "list_keys":
         await list_user_keys(query)
     
+    elif query.data == "test":
+        await test_connection(query)
+    
     elif query.data == "help":
         await show_help(query)
     
     elif query.data == "back_menu":
         await show_main_menu(query)
+
+async def test_connection(query) -> None:
+    """Test la connexion à StreamFusion"""
+    await query.edit_message_text("⏳ Test de connexion...")
     
-    elif query.data.startswith("delete_"):
-        api_key = query.data.replace("delete_", "")
-        await confirm_delete(query, api_key)
+    results = StreamFusionAPI.test_connection()
     
-    elif query.data.startswith("confirm_delete_"):
-        api_key = query.data.replace("confirm_delete_", "")
-        await delete_key(query, api_key)
+    message = "🔧 *Test de connexion StreamFusion*\n\n"
+    message += f"URL configurée : `{API_CONFIG['base_url']}`\n"
+    message += f"Secret Key : `{API_CONFIG['secret_key'][:10]}...`\n\n"
+    
+    if "error" in results:
+        message += f"❌ Erreur : {results['error']}\n"
+    else:
+        message += "📡 Résultats des tests :\n\n"
+        for endpoint, result in results.items():
+            if result.get("reachable"):
+                status = result.get("status")
+                emoji = "✅" if status == 200 else "⚠️"
+                message += f"{emoji} {endpoint}\n"
+                message += f"   Status: {status}\n\n"
+            else:
+                message += f"❌ {endpoint}\n"
+                message += f"   Erreur: {result.get('error', 'N/A')[:50]}\n\n"
+    
+    keyboard = [[InlineKeyboardButton("◀️ Retour", callback_data="back_menu")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
 
 async def generate_key(query) -> None:
     """Génère une clé via l'API StreamFusion"""
@@ -128,13 +211,13 @@ async def generate_key(query) -> None:
     
     result = StreamFusionAPI.generate_key(username)
     
-    if result and 'api_key' in result:
+    if result and result.get('success'):
         keyboard = [[InlineKeyboardButton("◀️ Retour au menu", callback_data="back_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # Extraire les informations de la réponse
-        api_key = result.get('api_key', 'N/A')
-        created_at = result.get('created_at', 'N/A')
+        data = result.get('data', {})
+        api_key = data.get('api_key') or data.get('key') or data.get('apiKey', 'N/A')
+        created_at = data.get('created_at') or data.get('createdAt', 'N/A')
         
         message = (
             "✅ *Clé API générée avec succès !*\n\n"
@@ -142,7 +225,8 @@ async def generate_key(query) -> None:
             f"👤 Utilisateur : {username}\n"
             f"📊 Requêtes : Illimitées\n"
             f"⏰ Expiration : Jamais\n"
-            f"📅 Créée le : {created_at}\n\n"
+            f"📅 Créée le : {created_at}\n"
+            f"🔗 Endpoint : {result.get('url', 'N/A')}\n\n"
             "⚠️ *Conservez cette clé en sécurité !*\n\n"
             "🔗 Utilisez cette clé pour configurer votre addon Stremio avec StreamFusion."
         )
@@ -153,13 +237,39 @@ async def generate_key(query) -> None:
             parse_mode='Markdown'
         )
     else:
-        keyboard = [[InlineKeyboardButton("🔄 Réessayer", callback_data="generate")]]
+        keyboard = [
+            [InlineKeyboardButton("🔧 Test connexion", callback_data="test")],
+            [InlineKeyboardButton("🔄 Réessayer", callback_data="generate")],
+            [InlineKeyboardButton("◀️ Retour", callback_data="back_menu")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
+        error_msg = result.get('error', 'Erreur inconnue') if result else "Pas de réponse"
+        tried_urls = result.get('tried_urls', []) if result else []
+        
+        message = (
+            "❌ *Erreur lors de la génération*\n\n"
+            f"Erreur : `{error_msg}`\n\n"
+        )
+        
+        if tried_urls:
+            message += "URLs testées :\n"
+            for url in tried_urls:
+                message += f"• {url}\n"
+            message += "\n"
+        
+        message += (
+            "Vérifiez :\n"
+            "• StreamFusion est bien démarré\n"
+            "• La SECRET_KEY est correcte\n"
+            "• L'URL de l'API est valide\n\n"
+            "Utilisez le bouton 'Test connexion' pour diagnostiquer."
+        )
+        
         await query.edit_message_text(
-            "❌ Erreur lors de la génération.\n\n"
-            "Vérifiez que StreamFusion est bien démarré.",
-            reply_markup=reply_markup
+            message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
         )
 
 async def list_user_keys(query) -> None:
@@ -176,9 +286,9 @@ async def list_user_keys(query) -> None:
         
         keyboard = []
         
-        for i, key_info in enumerate(keys[:5], 1):  # Limite à 5 clés
-            api_key = key_info.get('api_key', 'N/A')
-            created = key_info.get('created_at', 'N/A')
+        for i, key_info in enumerate(keys[:5], 1):
+            api_key = key_info.get('api_key') or key_info.get('key', 'N/A')
+            created = key_info.get('created_at') or key_info.get('createdAt', 'N/A')
             is_active = key_info.get('is_active', True)
             
             status = "🟢" if is_active else "🔴"
@@ -203,47 +313,7 @@ async def list_user_keys(query) -> None:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            "📭 Vous n'avez pas encore de clés API.\nGénérez-en une !",
-            reply_markup=reply_markup
-        )
-
-async def confirm_delete(query, api_key: str) -> None:
-    """Demande confirmation avant de supprimer une clé"""
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Confirmer", callback_data=f"confirm_delete_{api_key}"),
-            InlineKeyboardButton("❌ Annuler", callback_data="list_keys")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    short_key = f"{api_key[:8]}...{api_key[-8:]}"
-    
-    await query.edit_message_text(
-        f"⚠️ *Confirmer la suppression ?*\n\n"
-        f"Clé : `{short_key}`\n\n"
-        f"Cette action est irréversible.",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-async def delete_key(query, api_key: str) -> None:
-    """Supprime une clé API"""
-    await query.edit_message_text("⏳ Suppression en cours...")
-    
-    success = StreamFusionAPI.delete_key(api_key)
-    
-    keyboard = [[InlineKeyboardButton("◀️ Retour", callback_data="list_keys")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    if success:
-        await query.edit_message_text(
-            "✅ Clé supprimée avec succès !",
-            reply_markup=reply_markup
-        )
-    else:
-        await query.edit_message_text(
-            "❌ Erreur lors de la suppression.",
+            "📭 Aucune clé trouvée ou erreur de connexion.\n\nGénérez-en une !",
             reply_markup=reply_markup
         )
 
@@ -255,6 +325,7 @@ async def show_help(query) -> None:
         "• `/start` - Menu principal\n"
         "• `/generate` - Générer une clé rapidement\n"
         "• `/keys` - Voir vos clés\n"
+        "• `/test` - Tester la connexion à StreamFusion\n"
         "• `/help` - Afficher cette aide\n\n"
         "🔑 *Utilisation des clés :*\n"
         "1. Générez une clé API\n"
@@ -281,6 +352,7 @@ async def show_main_menu(query) -> None:
     keyboard = [
         [InlineKeyboardButton("🔑 Générer une clé", callback_data="generate")],
         [InlineKeyboardButton("📊 Mes clés", callback_data="list_keys")],
+        [InlineKeyboardButton("🔧 Test connexion", callback_data="test")],
         [InlineKeyboardButton("❓ Aide", callback_data="help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -299,14 +371,35 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     
     result = StreamFusionAPI.generate_key(username)
     
-    if result and 'api_key' in result:
-        api_key = result.get('api_key')
+    if result and result.get('success'):
+        data = result.get('data', {})
+        api_key = data.get('api_key') or data.get('key') or data.get('apiKey', 'N/A')
         await msg.edit_text(
             f"✅ *Clé générée !*\n\n🔑 `{api_key}`\n\n⚠️ Conservez-la en sécurité !",
             parse_mode='Markdown'
         )
     else:
-        await msg.edit_text("❌ Erreur de génération. Utilisez /start pour réessayer.")
+        await msg.edit_text(
+            "❌ Erreur de génération.\n\nUtilisez /test pour diagnostiquer le problème."
+        )
+
+async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Commande de test de connexion"""
+    msg = await update.message.reply_text("⏳ Test en cours...")
+    
+    results = StreamFusionAPI.test_connection()
+    
+    message = "🔧 *Test de connexion*\n\n"
+    message += f"URL : `{API_CONFIG['base_url']}`\n\n"
+    
+    if "error" in results:
+        message += f"❌ {results['error']}"
+    else:
+        working = sum(1 for r in results.values() if r.get('reachable'))
+        message += f"Endpoints testés : {len(results)}\n"
+        message += f"Fonctionnels : {working}\n"
+    
+    await msg.edit_text(message, parse_mode='Markdown')
 
 async def keys_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Commande pour compter les clés"""
@@ -322,7 +415,7 @@ async def keys_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
     else:
         await update.message.reply_text(
-            "📭 Vous n'avez pas encore de clés API.\n\nUtilisez /generate pour en créer une.",
+            "📭 Aucune clé trouvée ou erreur de connexion.\n\nUtilisez /generate pour en créer une.",
             parse_mode='Markdown'
         )
 
@@ -330,9 +423,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Commande d'aide"""
     help_text = (
         "🆘 *Aide StreamFusion*\n\n"
-        "Utilisez /start pour le menu principal.\n"
-        "Utilisez /generate pour créer une clé.\n"
-        "Utilisez /keys pour voir vos clés."
+        "Commandes :\n"
+        "• /start - Menu principal\n"
+        "• /generate - Créer une clé\n"
+        "• /keys - Voir vos clés\n"
+        "• /test - Test connexion\n"
+        "• /help - Cette aide"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
@@ -349,6 +445,7 @@ async def main() -> None:
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("generate", generate_command))
         application.add_handler(CommandHandler("keys", keys_command))
+        application.add_handler(CommandHandler("test", test_command))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CallbackQueryHandler(button_handler))
         

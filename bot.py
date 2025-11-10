@@ -1,5 +1,5 @@
 import os
-import secrets
+import uuid
 import psycopg2
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -13,10 +13,6 @@ DB_CONFIG = {
     "host": "stremio-postgres",
     "port": "5432"
 }
-
-def generate_streamfusion_key():
-    """Génère une clé au format Stream-fusion"""
-    return f"sf_{secrets.token_hex(16)}"
 
 def connect_db():
     try:
@@ -33,13 +29,13 @@ async def generate_api_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await update.message.reply_text("❌ Database unavailable")
             return
 
-        # Générer une clé au format Stream-fusion
-        api_key = generate_streamfusion_key()
+        # Générer un vrai UUID
+        api_key = str(uuid.uuid4())
         name = update.message.from_user.username or "Unknown"
 
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO api_keys (api_key, is_active, never_expire, total_queries, name) VALUES (%s, true, true, -1, %s) RETURNING api_key",
+                "INSERT INTO api_keys (api_key, is_active, never_expire, total_queries, name) VALUES (uuid(%s), true, true, -1, %s) RETURNING api_key",
                 (api_key, name)
             )
             returned_key = cur.fetchone()[0]
@@ -52,8 +48,6 @@ async def generate_api_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             )
             await update.message.reply_text(message, parse_mode='Markdown')
             
-    except psycopg2.IntegrityError:
-        await update.message.reply_text("❌ Key already exists, try again")
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {str(e)}")
     finally:

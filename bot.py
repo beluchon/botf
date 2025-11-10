@@ -16,10 +16,10 @@ API_LIST_ENDPOINT = "/api/auth/list"
 SECRET_KEY = os.getenv("SECRET_KEY", ".")
 
 
-def generate_unique_name(base_name: str) -> str:
-    """Génère un nom unique en ajoutant un timestamp"""
+def generate_unique_name() -> str:
+    """Génère un nom unique automatiquement"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{base_name}_{timestamp}"
+    return f"token_{timestamp}"
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -29,17 +29,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == "create_token":
         # Génère un nom unique automatiquement
-        unique_name = generate_unique_name("token_auto")
+        unique_name = generate_unique_name()
         await create_token(query, context, name=unique_name)
-    
-    elif query.data == "create_custom":
-        await query.edit_message_text(
-            "📝 Pour créer un token personnalisé, utilisez la commande :\n\n"
-            "`/token <nom>`\n\n"
-            "Exemple : `/token mon_application`\n\n"
-            "⚡ Un timestamp sera automatiquement ajouté pour garantir l'unicité !",
-            parse_mode="Markdown"
-        )
     
     elif query.data == "test_api":
         await test_api_connection(query)
@@ -47,13 +38,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "help":
         help_text = (
             "📖 *Guide d'utilisation*\n\n"
-            "🔹 `/start` - Afficher le menu principal\n"
-            "🔹 `/token <nom>` - Créer un token avec un nom personnalisé\n\n"
-            "💡 *Important :* Un timestamp est automatiquement ajouté à chaque nom "
-            "pour éviter les doublons. Exemple :\n"
-            "• `/token test` → `test_20241110_153045`\n\n"
+            "🔹 `/start` ou `/token` - Créer un nouveau token\n\n"
+            "💡 *Important :* Chaque token a un nom unique généré automatiquement "
+            "avec un timestamp. Exemple : `token_20241110_153045`\n\n"
             "Les tokens créés n'expirent jamais par défaut.\n\n"
-            "🔐 Vos tokens sont précieux, gardez-les en sécurité !"
+            "🔒 Vos tokens sont précieux, gardez-les en sécurité !"
         )
         keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -62,7 +51,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "back_to_menu":
         keyboard = [
             [InlineKeyboardButton("🔑 Créer un nouveau token", callback_data="create_token")],
-            [InlineKeyboardButton("📋 Créer token personnalisé", callback_data="create_custom")],
             [InlineKeyboardButton("🔍 Tester la connexion API", callback_data="test_api")],
             [InlineKeyboardButton("ℹ️ Aide", callback_data="help")]
         ]
@@ -74,8 +62,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
 
-async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name: str = "test"):
+async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name: str = None):
     """Crée un token via l'API"""
+    # Si pas de nom fourni, en générer un
+    if name is None:
+        name = generate_unique_name()
+    
     try:
         # Construction de l'URL complète
         url = f"{API_BASE_URL}{API_ENDPOINT}"
@@ -88,36 +80,40 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
             timeout=10
         )
         
-        # Afficher toujours un message de succès (même si erreur 500, la clé est créée)
         if response.status_code == 200:
             data = response.json()
             token = data.get("token", "Non disponible")
             
             message = (
                 f"✅ *Token créé avec succès !*\n\n"
-                f"🔖 Nom : `{name}`\n"
+                f"🏷️ Nom : `{name}`\n"
                 f"🔑 Token : `{token}`\n\n"
                 f"⏰ Expiration : Jamais\n\n"
                 f"⚠️ Copiez ce token maintenant, vous ne pourrez plus le récupérer !"
             )
+            
+            keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            if isinstance(query_or_update, Update):
+                await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+            else:
+                await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
         else:
-            # La clé est créée malgré l'erreur 500
-            message = (
-                f"✅ *Token créé avec succès !*\n\n"
-                f"🔖 Nom : `{name}`\n\n"
-                f"⏰ Expiration : Jamais\n\n"
-                f"📋 Les détails complets seront affichés ci-dessous..."
+            error_message = (
+                f"❌ *Erreur lors de la création*\n\n"
+                f"Code : {response.status_code}\n"
+                f"Détails : {response.text}"
             )
+            keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            if isinstance(query_or_update, Update):
+                await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
+            else:
+                await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
         
-        keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        if isinstance(query_or_update, Update):
-            await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
-        else:
-            await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
-        
-        # Attendre 2 secondes puis récupérer la liste des clés (seulement si succès)
+        # Attendre 2 secondes puis récupérer la liste des clés (même en cas d'erreur)
         await asyncio.sleep(2)
         
         # Récupérer la dernière clé créée
@@ -148,7 +144,7 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                     # Envoyer un nouveau message avec les détails de la clé
                     key_info = (
                         f"📋 *Détails de la dernière clé créée :*\n\n"
-                        f"🔖 Nom : `{last_key.get('name', 'N/A')}`\n"
+                        f"🏷️ Nom : `{last_key.get('name', 'N/A')}`\n"
                         f"🆔 ID : `{last_key.get('id', 'N/A')}`\n"
                         f"🔑 API Key : `{last_key.get('api_key', 'N/A')}`\n"
                         f"📅 Créée le : `{last_key.get('created_at', 'N/A')}`\n"
@@ -162,13 +158,38 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                         await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
                     else:
                         await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
+                else:
+                    # Liste vide
+                    error_msg = "⚠️ Aucune clé trouvée dans la liste."
+                    if isinstance(query_or_update, Update):
+                        await query_or_update.message.reply_text(error_msg)
+                    else:
+                        await query_or_update.message.reply_text(error_msg)
+            else:
+                # Erreur lors de la récupération de la liste
+                error_msg = (
+                    f"⚠️ *Impossible de récupérer la liste des clés*\n\n"
+                    f"Code : {list_response.status_code}\n"
+                    f"Détails : {list_response.text[:200]}"
+                )
+                if isinstance(query_or_update, Update):
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
+                else:
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
                         
         except Exception as list_error:
-            # Erreur silencieuse pour la récupération de la liste (optionnel)
-            print(f"Info: Impossible de récupérer les détails : {list_error}")
+            # Erreur de connexion ou autre
+            error_msg = f"❌ *Erreur lors de la récupération de la liste*\n\n{str(list_error)}"
+            try:
+                if isinstance(query_or_update, Update):
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
+                else:
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
+            except:
+                print(f"Erreur lors de la récupération de la liste : {list_error}")
                 
     except Exception as e:
-        error_message = f"❌ *Erreur de connexion*\n\nImpossible de contacter l'API. Vérifiez votre connexion."
+        error_message = f"❌ *Erreur de connexion*\n\n{str(e)}"
         keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -182,7 +203,7 @@ async def test_api_connection(query):
     try:
         url = f"{API_BASE_URL}{API_ENDPOINT}"
         # Test avec un vrai appel POST comme l'API l'attend
-        test_name = generate_unique_name("test_connection")
+        test_name = generate_unique_name()
         response = requests.post(
             url,
             params={"name": test_name, "never_expires": "true"},
@@ -202,7 +223,7 @@ async def test_api_connection(query):
                 f"⚠️ *API accessible mais erreur*\n\n"
                 f"🌐 URL : `{API_BASE_URL}`\n"
                 f"📡 Status : {response.status_code}\n"
-                f"💡 Vérifiez la configuration du serveur\n"
+                f"📄 Réponse : {response.text[:200]}\n"
             )
     except requests.exceptions.ConnectionError:
         message = (
@@ -215,43 +236,21 @@ async def test_api_connection(query):
             f"3️⃣ Si vous êtes dans Docker, utilisez 172.17.0.1\n"
         )
     except Exception as e:
-        message = f"❌ *Erreur*\n\nImpossible de tester la connexion."
+        message = f"❌ *Erreur*\n\n{str(e)}"
     
     keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def token_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Commande /token <nom> pour créer un token personnalisé"""
-    if not context.args:
-        await update.message.reply_text(
-            "❌ Veuillez spécifier un nom pour le token.\n\n"
-            "Exemple : `/token mon_application`\n\n"
-            "💡 Un timestamp sera automatiquement ajouté pour garantir l'unicité !",
-            parse_mode="Markdown"
-        )
-        return
-    
-    base_name = " ".join(context.args)
-    # Génère un nom unique
-    unique_name = generate_unique_name(base_name)
+    """Commande /token pour créer un token automatiquement"""
+    unique_name = generate_unique_name()
     await create_token(update, context, name=unique_name)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Commande /start pour afficher le menu principal"""
-    keyboard = [
-        [InlineKeyboardButton("🔑 Créer un nouveau token", callback_data="create_token")],
-        [InlineKeyboardButton("📋 Créer token personnalisé", callback_data="create_custom")],
-        [InlineKeyboardButton("🔍 Tester la connexion API", callback_data="test_api")],
-        [InlineKeyboardButton("ℹ️ Aide", callback_data="help")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    message = (
-        "🤖 *Bot d'Authentification*\n\n"
-        "Bienvenue ! Je peux créer des tokens d'authentification pour vous.\n\n"
-        "Choisissez une option ci-dessous :"
-    )
-    await update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+    """Commande /start pour créer un token automatiquement (même fonction que /token)"""
+    unique_name = generate_unique_name()
+    await create_token(update, context, name=unique_name)
 
 def main():
     """Point d'entrée principal du bot"""

@@ -1,28 +1,11 @@
+
 # api.py
 import os
 import uuid
 import psycopg2
 from flask import Flask, request, jsonify
 from datetime import datetime
-import logging
-from logging.handlers import RotatingFileHandler
 import sys
-
-# Configuration du logging
-logging.basicConfig(
-    level=logging.INFO,
-    handlers=[
-        RotatingFileHandler(
-            "/app/logs/api_service.log",
-            maxBytes=10485760,  # 10MB
-            backupCount=5
-        ),
-        logging.StreamHandler(sys.stdout)
-    ],
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-logger = logging.getLogger(__name__)
 
 # Configuration de la base de données
 DB_CONFIG = {
@@ -43,12 +26,12 @@ def connect_db(max_retries=5, retry_delay=5):
     for attempt in range(max_retries):
         try:
             conn = psycopg2.connect(**DB_CONFIG)
-            logger.info("Connexion à la base de données établie avec succès")
+            print("Connexion à la base de données établie avec succès")
             return conn
         except Exception as e:
-            logger.error(f"Tentative {attempt + 1}/{max_retries} - Erreur de connexion: {e}")
+            print(f"Tentative {attempt + 1}/{max_retries} - Erreur de connexion: {e}")
             if attempt < max_retries - 1:
-                logger.info(f"Nouvelle tentative dans {retry_delay} secondes...")
+                print(f"Nouvelle tentative dans {retry_delay} secondes...")
                 time.sleep(retry_delay)
     return None
 
@@ -92,7 +75,7 @@ def generate_api_key():
             created_at = result[1]
             conn.commit()
 
-            logger.info(f"Nouvelle clé API générée pour l'utilisateur: {name}")
+            print(f"Nouvelle clé API générée pour l'utilisateur: {name}")
             
             response_data = {
                 "success": True,
@@ -107,7 +90,7 @@ def generate_api_key():
             
     except Exception as e:
         error_msg = f"Erreur lors de la génération de la clé API: {e}"
-        logger.error(error_msg)
+        print(error_msg)
         return jsonify({"error": "Erreur interne du serveur"}), 500
     finally:
         if conn:
@@ -150,7 +133,7 @@ def list_api_keys():
             
     except Exception as e:
         error_msg = f"Erreur lors de la récupération des clés API: {e}"
-        logger.error(error_msg)
+        print(error_msg)
         return jsonify({"error": "Erreur interne du serveur"}), 500
     finally:
         if conn:
@@ -186,7 +169,7 @@ def revoke_api_key():
             
             if result:
                 conn.commit()
-                logger.info(f"Clé API révoquée: {result[1]} ({result[0]})")
+                print(f"Clé API révoquée: {result[1]} ({result[0]})")
                 return jsonify({
                     "success": True,
                     "message": f"Clé API révoquée pour {result[1]}"
@@ -196,7 +179,7 @@ def revoke_api_key():
             
     except Exception as e:
         error_msg = f"Erreur lors de la révocation de la clé API: {e}"
-        logger.error(error_msg)
+        print(error_msg)
         return jsonify({"error": "Erreur interne du serveur"}), 500
     finally:
         if conn:
@@ -219,5 +202,5 @@ if __name__ == '__main__':
     port = int(os.getenv("API_PORT", 8082))
     debug = os.getenv("DEBUG", "false").lower() == "true"
     
-    logger.info(f"Démarrage de l'API sur le port {port}")
+    print(f"Démarrage de l'API sur le port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)

@@ -4,7 +4,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 
 # Configuration
 TELEGRAM_BOT_TOKEN = "8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8"
-API_URL = "http://127.0.0.1:8082/api/auth/new"
+
+# Configuration pour Docker (le bot accède à l'API sur l'hôte)
+API_BASE_URL = "http://172.17.0.1:8082"  # IP du Docker bridge pour accéder à l'hôte Linux
+API_ENDPOINT = "/api/auth/new"
 SECRET_KEY = "testuu"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -12,6 +15,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🔑 Créer un nouveau token", callback_data="create_token")],
         [InlineKeyboardButton("📋 Créer token personnalisé", callback_data="create_custom")],
+        [InlineKeyboardButton("🔍 Tester la connexion API", callback_data="test_api")],
         [InlineKeyboardButton("ℹ️ Aide", callback_data="help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -40,6 +44,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
     
+    elif query.data == "test_api":
+        await test_api_connection(query)
+    
     elif query.data == "help":
         help_text = (
             "📖 *Guide d'utilisation*\n\n"
@@ -56,6 +63,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("🔑 Créer un nouveau token", callback_data="create_token")],
             [InlineKeyboardButton("📋 Créer token personnalisé", callback_data="create_custom")],
+            [InlineKeyboardButton("🔍 Tester la connexion API", callback_data="test_api")],
             [InlineKeyboardButton("ℹ️ Aide", callback_data="help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -69,9 +77,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name: str = "test"):
     """Crée un token via l'API"""
     try:
+        # Construction de l'URL complète
+        url = f"{API_BASE_URL}{API_ENDPOINT}"
+        
         # Appel à l'API
         response = requests.post(
-            API_URL,
+            url,
             params={"name": name, "never_expires": "true"},
             headers={"secret-key": SECRET_KEY},
             timeout=10
@@ -109,6 +120,49 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                 await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
             else:
                 await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
+
+async def test_api_connection(query):
+    """Teste la connexion à l'API"""
+    try:
+        url = f"{API_BASE_URL}{API_ENDPOINT}"
+        # Test avec un vrai appel POST comme l'API l'attend
+        response = requests.post(
+            url,
+            params={"name": "test_connection", "never_expires": "true"},
+            headers={"secret-key": SECRET_KEY},
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            message = (
+                f"✅ *Connexion API réussie !*\n\n"
+                f"🌐 URL : `{API_BASE_URL}`\n"
+                f"📡 Status : {response.status_code}\n"
+                f"✨ L'API répond correctement !\n"
+            )
+        else:
+            message = (
+                f"⚠️ *API accessible mais erreur*\n\n"
+                f"🌐 URL : `{API_BASE_URL}`\n"
+                f"📡 Status : {response.status_code}\n"
+                f"📄 Réponse : {response.text[:200]}\n"
+            )
+    except requests.exceptions.ConnectionError:
+        message = (
+            f"❌ *Erreur de connexion*\n\n"
+            f"🌐 URL : `{API_BASE_URL}`\n"
+            f"📡 L'API n'est pas accessible\n\n"
+            f"*Solutions :*\n"
+            f"1️⃣ Vérifiez que votre API est démarrée\n"
+            f"2️⃣ Vérifiez l'URL et le port dans le code\n"
+            f"3️⃣ Si vous êtes dans Docker, utilisez 172.17.0.1\n"
+        )
+    except Exception as e:
+        message = f"❌ *Erreur*\n\n{str(e)}"
+    
+    keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
                 
     except Exception as e:
         error_message = f"❌ *Erreur de connexion*\n\n{str(e)}"

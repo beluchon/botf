@@ -1,54 +1,4 @@
-if response.status_code == 200:
-            data = response.json()
-            token = data.get("token", "Non disponible")
-            
-            message = (
-                f"✅ *Token créé avec succès !*\n\n"
-                f"📝 Nom : `{name}`\n"
-                f"🔑 Token : `{token}`\n\n"
-                f"⏰ Expiration : Jamais\n\n"
-                f"⚠️ Copiez ce token maintenant, vous ne pourrez plus le récupérer !"
-            )
-            
-            keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            if isinstance(query_or_update, Update):
-                sent_message = await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
-            else:
-                sent_message = await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
-            
-            # Attendre 2 secondes puis récupérer la liste des clés SEULEMENT si la création a réussi
-            await asyncio.sleep(2)
-            
-            # Récupérer la dernière clé créée
-            try:
-                list_url = f"{API_BASE_URL}{API_LIST_ENDPOINT}"
-                list_response = requests.get(
-                    list_url,
-                    headers={"secret-key": SECRET_KEY},
-                    timeout=5
-                )
-                
-                if list_response.status_code == 200:
-                    keys_data = list_response.json()
-                    
-                    # Trouver la dernière clé créée (celle avec le nom qu'on vient de créer)
-                    if isinstance(keys_data, list) and len(keys_data) > 0:
-                        # Chercher la clé avec le nom correspondant
-                        last_key = None
-                        for key in keys_data:
-                            if key.get("name") == name:
-                                last_key = key
-                                break
-                        
-                        # Si pas trouvée, prendre la dernière de la liste
-                        if not last_key:
-                            last_key = keys_data[-1]
-                        
-                        # Envoyer un nouveau message avec les détails de la clé
-                        key_info = (
-                            f"🔍 *import requests
+import requests
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -156,58 +106,9 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             if isinstance(query_or_update, Update):
-                sent_message = await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+                await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
             else:
-                sent_message = await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
-            
-            # Attendre 2 secondes puis récupérer la liste des clés
-            await asyncio.sleep(2)
-            
-            # Récupérer la dernière clé créée
-            try:
-                list_url = f"{API_BASE_URL}{API_LIST_ENDPOINT}"
-                list_response = requests.get(
-                    list_url,
-                    headers={"secret-key": SECRET_KEY},
-                    timeout=5
-                )
-                
-                if list_response.status_code == 200:
-                    keys_data = list_response.json()
-                    
-                    # Trouver la dernière clé créée (celle avec le nom qu'on vient de créer)
-                    if isinstance(keys_data, list) and len(keys_data) > 0:
-                        # Chercher la clé avec le nom correspondant
-                        last_key = None
-                        for key in keys_data:
-                            if key.get("name") == name:
-                                last_key = key
-                                break
-                        
-                        # Si pas trouvée, prendre la dernière de la liste
-                        if not last_key:
-                            last_key = keys_data[-1]
-                        
-                        # Envoyer un nouveau message avec les détails de la clé
-                        key_info = (
-                            f"🔍 *Détails de la dernière clé créée :*\n\n"
-                            f"📝 Nom : `{last_key.get('name', 'N/A')}`\n"
-                            f"🆔 ID : `{last_key.get('id', 'N/A')}`\n"
-                            f"📅 Créée le : `{last_key.get('created_at', 'N/A')}`\n"
-                            f"⏰ Expire : `{last_key.get('expires_at', 'Jamais')}`\n"
-                        )
-                        
-                        keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
-                        reply_markup = InlineKeyboardMarkup(keyboard)
-                        
-                        if isinstance(query_or_update, Update):
-                            await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
-                        else:
-                            # Pour les callback queries, envoyer un nouveau message via le bot
-                            await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
-                            
-            except Exception as list_error:
-                print(f"Erreur lors de la récupération de la liste : {list_error}")
+                await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
         else:
             error_message = (
                 f"❌ *Erreur lors de la création*\n\n"
@@ -221,6 +122,80 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                 await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
             else:
                 await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
+        
+        # Attendre 2 secondes puis récupérer la liste des clés (même en cas d'erreur)
+        await asyncio.sleep(2)
+        
+        # Récupérer la dernière clé créée
+        try:
+            list_url = f"{API_BASE_URL}{API_LIST_ENDPOINT}"
+            list_response = requests.get(
+                list_url,
+                headers={"secret-key": SECRET_KEY},
+                timeout=5
+            )
+            
+            if list_response.status_code == 200:
+                keys_data = list_response.json()
+                
+                # Trouver la dernière clé créée (celle avec le nom qu'on vient de créer)
+                if isinstance(keys_data, list) and len(keys_data) > 0:
+                    # Chercher la clé avec le nom correspondant
+                    last_key = None
+                    for key in keys_data:
+                        if key.get("name") == name:
+                            last_key = key
+                            break
+                    
+                    # Si pas trouvée, prendre la dernière de la liste
+                    if not last_key:
+                        last_key = keys_data[-1]
+                    
+                    # Envoyer un nouveau message avec les détails de la clé
+                    key_info = (
+                        f"🔍 *Détails de la dernière clé créée :*\n\n"
+                        f"📝 Nom : `{last_key.get('name', 'N/A')}`\n"
+                        f"🆔 ID : `{last_key.get('id', 'N/A')}`\n"
+                        f"📅 Créée le : `{last_key.get('created_at', 'N/A')}`\n"
+                        f"⏰ Expire : `{last_key.get('expires_at', 'Jamais')}`\n"
+                    )
+                    
+                    keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    if isinstance(query_or_update, Update):
+                        await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
+                    else:
+                        await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
+                else:
+                    # Liste vide
+                    error_msg = "⚠️ Aucune clé trouvée dans la liste."
+                    if isinstance(query_or_update, Update):
+                        await query_or_update.message.reply_text(error_msg)
+                    else:
+                        await query_or_update.message.reply_text(error_msg)
+            else:
+                # Erreur lors de la récupération de la liste
+                error_msg = (
+                    f"⚠️ *Impossible de récupérer la liste des clés*\n\n"
+                    f"Code : {list_response.status_code}\n"
+                    f"Détails : {list_response.text[:200]}"
+                )
+                if isinstance(query_or_update, Update):
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
+                else:
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
+                        
+        except Exception as list_error:
+            # Erreur de connexion ou autre
+            error_msg = f"❌ *Erreur lors de la récupération de la liste*\n\n{str(list_error)}"
+            try:
+                if isinstance(query_or_update, Update):
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
+                else:
+                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
+            except:
+                print(f"Erreur lors de la récupération de la liste : {list_error}")
                 
     except Exception as e:
         error_message = f"❌ *Erreur de connexion*\n\n{str(e)}"

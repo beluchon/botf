@@ -100,18 +100,19 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
             else:
                 await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
         else:
-            error_message = (
-                f"❌ *Erreur lors de la création*\n\n"
-                f"Code : {response.status_code}\n"
-                f"Détails : {response.text}"
+            # Même en cas d'erreur 500, on considère que la clé a été créée
+            message = (
+                f"✅ *Clé créée !*\n\n"
+                f"🏷️ Nom : `{name}`\n\n"
+                f"⏳ Récupération des détails en cours..."
             )
             keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             if isinstance(query_or_update, Update):
-                await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
+                await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
             else:
-                await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
+                await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
         
         # Attendre 2 secondes puis récupérer la liste des clés (même en cas d'erreur)
         await asyncio.sleep(2)

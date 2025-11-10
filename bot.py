@@ -1,107 +1,58 @@
-import os
 import requests
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes
-import asyncio
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext
 
-# 🛠️ Configuration
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Remplacez par votre token
-LOCAL_API_URL = "http://localhost:8082"
+# Configuration
+BOT_TOKEN = "8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8"
+API_URL_NEW = "http://localhost:8082/api/auth/new"
+API_URL_LIST = "http://localhost:8082/api/auth/list"
+API_SECRET_KEY = "testuu"
 
-# ✅ Fonction pour créer un utilisateur
-async def create_user(bot, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # URL pour créer l'utilisateur
-    create_url = f"{LOCAL_API_URL}/api/auth/new?name=bot_user&never_expires=true"
-    headers = {"secret-key": "testuu"}
-
-    print("🚀 Création de l'utilisateur...")
+def create_api_key():
+    headers = {"secret-key": API_SECRET_KEY}
+    params = {"name": "bot_user", "never_expires": "true"}
     try:
-        response = requests.post(create_url, headers=headers)
+        response = requests.post(API_URL_NEW, headers=headers, params=params)
         response.raise_for_status()
-        print("✅ Création réussie")
+        data = response.json()
+        return data.get("api_key", "Clé non trouvée dans la réponse")
     except Exception as e:
-        await update.message.reply_text(f"❌ Erreur : {e}")
-        return
+        return f"Erreur : {str(e)}"
 
-    # 🔍 Récupérer la liste des clés
-    list_url = f"{LOCAL_API_URL}/api/auth/list"
-    list_headers = {"secret-key": "testuu"}
-
+def get_latest_api_key():
+    headers = {"secret-key": API_SECRET_KEY}
     try:
-        list_response = requests.get(list_url, headers=list_headers)
-        list_response.raise_for_status()
-        data = list_response.json()
-
-        # On suppose que la réponse est une liste d'objets avec un champ "key"
-        if isinstance(data, list) and len(data) > 0:
-            key = data[0].get("key", "KEY_NOT_FOUND")
-            await update.message.reply_text(f"🔑 Clé récupérée : {key}")
+        response = requests.get(API_URL_LIST, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        # Supposons que la liste des clés est dans data["keys"] ou similaire
+        keys = data.get("keys", [])
+        if keys:
+            # On suppose que la clé la plus récente est la dernière dans la liste
+            latest = keys[-1]
+            return latest.get("api_key", "Clé non trouvée")
         else:
-            await update.message.reply_text("⚠️ Aucune clé trouvée.")
+            return "Aucune clé trouvée dans la liste."
     except Exception as e:
-        await update.message.reply_text(f"❌ Erreur lors de la récupération : {e}")
+        return f"Erreur : {str(e)}"
 
-# 📥 Commande /start
-async def start_command(bot, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 Bienvenue !\n\n"
-        "Cliquez sur le bouton ci-dessous pour obtenir une clé d'authentification.\n"
-        "Je créerai un utilisateur et vous retournerai la clé automatiquement."
-    )
+def start(update: Update, context: CallbackContext):
+    api_key = create_api_key()
+    update.effective_message.reply_text(f"Voici ta nouvelle clé API :\n`{api_key}`", parse_mode="Markdown")
 
-# 📲 Bouton "Obtenir la clé"
-async def get_key_button(bot, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Créer le bouton
-    keyboard = [
-        [InlineKeyboardButton("Obtenir la clé", callback_data='get_key')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("✅ Cliquez sur le bouton pour obtenir la clé.", reply_markup=reply_markup)
+def latest(update: Update, context: CallbackContext):
+    latest_key = get_latest_api_key()
+    update.effective_message.reply_text(f"Dernière clé API :\n`{latest_key}`", parse_mode="Markdown")
 
-# 📦 Commande /key (pour les utilisateurs qui veulent lancer le processus)
-async def key_command(bot, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await create_user(bot, update, context)
-
-# 🧩 Commande /help
-async def help_command(bot, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔧 Commandes disponibles :\n"
-        "/start — Démarrer le bot\n"
-        "/help — Afficher cette aide\n"
-        "/key — Lancer la création de la clé (via commande)\n"
-        "👉 Cliquez sur le bouton pour obtenir la clé."
-    )
-
-# 🧩 Gestion des messages (si l'utilisateur envoie un message, on l’interprète comme un clic sur le bouton)
-# Mais pour simplifier, on va gérer les clics avec le bot
-
-# 🚫 On n’écoute pas les messages, mais on utilise les boutons
-
-# 🎯 On utilise le bot pour gérer les commandes et les clics
-# On utilise un handler pour le bouton "Obtenir la clé"
-
-# 🧠 On va ajouter un handler pour les clics sur le bouton
-async def handle_callback_query(bot, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if query.data == 'get_key':
-        await create_user(bot, update, context)
-        await query.answer()  # Répondre au clic
-
-# 🚀 Initialisation
 def main():
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    updater = Updater(BOT_TOKEN)
+    dispatcher = updater.dispatcher
 
-    # Ajouter les handlers
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("key", key_command))
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("latest", latest))
 
-    # Gestion des clics sur les boutons
-    application.add_handler(CallbackQueryHandler(handle_callback_query))
-
-    # Démarrer l'application
-    application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
     main()
-

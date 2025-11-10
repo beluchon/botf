@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
 
 # Créer la structure de dossiers AVANT de changer d'utilisateur
 WORKDIR /app
-RUN mkdir -p logs && chmod 755 logs
+RUN mkdir -p /app/logs && chmod 755 /app/logs
 
 # Copier les requirements d'abord
 COPY requirements.txt .

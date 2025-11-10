@@ -6,7 +6,7 @@ from datetime import datetime
 
 # Configuration
 TELEGRAM_TOKEN = "8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8"
-API_BASE_URL = "http://localhost:8082/api/auth"
+API_BASE_URL = "http://127.0.0.1:8082/api/auth"
 SECRET_KEY = "testuu"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):

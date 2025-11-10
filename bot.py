@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
 # Configuration
-BOT_TOKEN = "8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8"
+BOT_TOKEN = "TON_TOKEN_TELEGRAM_ICI"
 API_URL_NEW = "http://localhost:8082/api/auth/new"
 API_URL_LIST = "http://localhost:8082/api/auth/list"
 API_SECRET_KEY = "testuu"
@@ -25,10 +25,8 @@ def get_latest_api_key():
         response = requests.get(API_URL_LIST, headers=headers)
         response.raise_for_status()
         data = response.json()
-        # Supposons que la liste des clés est dans data["keys"] ou similaire
         keys = data.get("keys", [])
         if keys:
-            # On suppose que la clé la plus récente est la dernière dans la liste
             latest = keys[-1]
             return latest.get("api_key", "Clé non trouvée")
         else:

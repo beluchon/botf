@@ -1,4 +1,3 @@
-
 # api.py
 import os
 import uuid
@@ -204,3 +203,4 @@ if __name__ == '__main__':
     
     print(f"Démarrage de l'API sur le port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
+

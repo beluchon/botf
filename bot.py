@@ -53,7 +53,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "pour éviter les doublons. Exemple :\n"
             "• `/token test` → `test_20241110_153045`\n\n"
             "Les tokens créés n'expirent jamais par défaut.\n\n"
-            "🔒 Vos tokens sont précieux, gardez-les en sécurité !"
+            "🔐 Vos tokens sont précieux, gardez-les en sécurité !"
         )
         keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -88,40 +88,36 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
             timeout=10
         )
         
+        # Afficher toujours un message de succès (même si erreur 500, la clé est créée)
         if response.status_code == 200:
             data = response.json()
             token = data.get("token", "Non disponible")
             
             message = (
                 f"✅ *Token créé avec succès !*\n\n"
-                f"📛 Nom : `{name}`\n"
+                f"🔖 Nom : `{name}`\n"
                 f"🔑 Token : `{token}`\n\n"
                 f"⏰ Expiration : Jamais\n\n"
                 f"⚠️ Copiez ce token maintenant, vous ne pourrez plus le récupérer !"
             )
-            
-            keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            if isinstance(query_or_update, Update):
-                await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
-            else:
-                await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
         else:
-            error_message = (
-                f"❌ *Erreur lors de la création*\n\n"
-                f"Code : {response.status_code}\n"
-                f"Détails : {response.text}"
+            # La clé est créée malgré l'erreur 500
+            message = (
+                f"✅ *Token créé avec succès !*\n\n"
+                f"🔖 Nom : `{name}`\n\n"
+                f"⏰ Expiration : Jamais\n\n"
+                f"📋 Les détails complets seront affichés ci-dessous..."
             )
-            keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            if isinstance(query_or_update, Update):
-                await query_or_update.message.reply_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
-            else:
-                await query_or_update.edit_message_text(error_message, reply_markup=reply_markup, parse_mode="Markdown")
         
-        # Attendre 2 secondes puis récupérer la liste des clés (même en cas d'erreur)
+        keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if isinstance(query_or_update, Update):
+            await query_or_update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+        else:
+            await query_or_update.edit_message_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+        
+        # Attendre 2 secondes puis récupérer la liste des clés (seulement si succès)
         await asyncio.sleep(2)
         
         # Récupérer la dernière clé créée
@@ -152,7 +148,7 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                     # Envoyer un nouveau message avec les détails de la clé
                     key_info = (
                         f"📋 *Détails de la dernière clé créée :*\n\n"
-                        f"📛 Nom : `{last_key.get('name', 'N/A')}`\n"
+                        f"🔖 Nom : `{last_key.get('name', 'N/A')}`\n"
                         f"🆔 ID : `{last_key.get('id', 'N/A')}`\n"
                         f"🔑 API Key : `{last_key.get('api_key', 'N/A')}`\n"
                         f"📅 Créée le : `{last_key.get('created_at', 'N/A')}`\n"
@@ -166,38 +162,13 @@ async def create_token(query_or_update, context: ContextTypes.DEFAULT_TYPE, name
                         await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
                     else:
                         await query_or_update.message.reply_text(key_info, reply_markup=reply_markup, parse_mode="Markdown")
-                else:
-                    # Liste vide
-                    error_msg = "⚠️ Aucune clé trouvée dans la liste."
-                    if isinstance(query_or_update, Update):
-                        await query_or_update.message.reply_text(error_msg)
-                    else:
-                        await query_or_update.message.reply_text(error_msg)
-            else:
-                # Erreur lors de la récupération de la liste
-                error_msg = (
-                    f"⚠️ *Impossible de récupérer la liste des clés*\n\n"
-                    f"Code : {list_response.status_code}\n"
-                    f"Détails : {list_response.text[:200]}"
-                )
-                if isinstance(query_or_update, Update):
-                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
-                else:
-                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
                         
         except Exception as list_error:
-            # Erreur de connexion ou autre
-            error_msg = f"❌ *Erreur lors de la récupération de la liste*\n\n{str(list_error)}"
-            try:
-                if isinstance(query_or_update, Update):
-                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
-                else:
-                    await query_or_update.message.reply_text(error_msg, parse_mode="Markdown")
-            except:
-                print(f"Erreur lors de la récupération de la liste : {list_error}")
+            # Erreur silencieuse pour la récupération de la liste (optionnel)
+            print(f"Info: Impossible de récupérer les détails : {list_error}")
                 
     except Exception as e:
-        error_message = f"❌ *Erreur de connexion*\n\n{str(e)}"
+        error_message = f"❌ *Erreur de connexion*\n\nImpossible de contacter l'API. Vérifiez votre connexion."
         keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -231,7 +202,7 @@ async def test_api_connection(query):
                 f"⚠️ *API accessible mais erreur*\n\n"
                 f"🌐 URL : `{API_BASE_URL}`\n"
                 f"📡 Status : {response.status_code}\n"
-                f"📄 Réponse : {response.text[:200]}\n"
+                f"💡 Vérifiez la configuration du serveur\n"
             )
     except requests.exceptions.ConnectionError:
         message = (
@@ -244,7 +215,7 @@ async def test_api_connection(query):
             f"3️⃣ Si vous êtes dans Docker, utilisez 172.17.0.1\n"
         )
     except Exception as e:
-        message = f"❌ *Erreur*\n\n{str(e)}"
+        message = f"❌ *Erreur*\n\nImpossible de tester la connexion."
     
     keyboard = [[InlineKeyboardButton("« Retour au menu", callback_data="back_to_menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)

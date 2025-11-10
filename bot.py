@@ -12,23 +12,7 @@ API_ENDPOINT = "/api/auth/new"
 API_LIST_ENDPOINT = "/api/auth/list"
 SECRET_KEY = "testuu"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Commande /start - Affiche le menu principal"""
-    keyboard = [
-        [InlineKeyboardButton("🔑 Créer un nouveau token", callback_data="create_token")],
-        [InlineKeyboardButton("📋 Créer token personnalisé", callback_data="create_custom")],
-        [InlineKeyboardButton("🔍 Tester la connexion API", callback_data="test_api")],
-        [InlineKeyboardButton("ℹ️ Aide", callback_data="help")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    message = (
-        "🤖 *Bot d'Authentification*\n\n"
-        "Bienvenue ! Je peux créer des tokens d'authentification pour vous.\n\n"
-        "Choisissez une option ci-dessous :"
-    )
-    
-    await update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère les clics sur les boutons"""
@@ -270,7 +254,6 @@ def main():
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Ajouter les handlers
-    application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("token", token_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     

@@ -5,14 +5,10 @@ import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Configuration du logging
+# Configuration du logging basique
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[
-        logging.FileHandler('/app/logs/bot.log'),
-        logging.StreamHandler()
-    ]
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
@@ -30,11 +26,11 @@ required_vars = {
 
 missing_vars = [var for var, value in required_vars.items() if not value]
 if missing_vars:
-    logger.error(f"Variables manquantes: {', '.join(missing_vars)}")
+    print(f"❌ Variables manquantes: {', '.join(missing_vars)}")
     exit(1)
 
-logger.info("🤖 FatherBot initialisation...")
-logger.info(f"API Base URL: {API_BASE_URL}")
+print("🤖 FatherBot initialisation...")
+print(f"📍 API Base URL: {API_BASE_URL}")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère la commande /start"""
@@ -86,13 +82,12 @@ async def generate_api_key(update: Update, context: ContextTypes.DEFAULT_TYPE, u
             'secret-key': SECRET_KEY
         }
         
-        logger.info(f"🔑 Génération API key pour: {username}")
-        logger.info(f"🌐 URL: {api_url}")
+        print(f"🔑 Génération API key pour: {username}")
         
         # Envoi de la requête POST
         response = requests.post(api_url, params=params, headers=headers, timeout=30)
         
-        logger.info(f"📡 Réponse API: {response.status_code}")
+        print(f"📡 Réponse API: {response.status_code}")
         
         if response.status_code == 200:
             # Récupération de l'API key depuis la réponse
@@ -109,8 +104,7 @@ async def generate_api_key(update: Update, context: ContextTypes.DEFAULT_TYPE, u
             """
             await update.message.reply_text(success_message, parse_mode='Markdown')
             
-            # Log pour le débogage
-            logger.info(f"✅ API key générée pour {username}")
+            print(f"✅ API key générée pour {username}")
             
         elif response.status_code == 400:
             error_data = response.json()
@@ -133,7 +127,7 @@ Message: {response.text}
 Vérifiez que l'API est accessible à: {API_BASE_URL}
             """
             await update.message.reply_text(error_message)
-            logger.error(f"Erreur API: {response.status_code} - {response.text}")
+            print(f"❌ Erreur API: {response.status_code} - {response.text}")
             
     except requests.exceptions.ConnectionError:
         error_message = f"""
@@ -148,7 +142,7 @@ Vérifiez que:
 • Le réseau est accessible
         """
         await update.message.reply_text(error_message, parse_mode='Markdown')
-        logger.error(f"Connexion impossible à: {API_BASE_URL}")
+        print(f"❌ Connexion impossible à: {API_BASE_URL}")
         
     except requests.exceptions.Timeout:
         error_message = """
@@ -158,7 +152,7 @@ L'API n'a pas répondu dans le temps imparti.
 Veuillez réessayer plus tard.
         """
         await update.message.reply_text(error_message)
-        logger.error("Timeout de l'API")
+        print("❌ Timeout de l'API")
         
     except Exception as e:
         error_message = f"""
@@ -167,7 +161,7 @@ Veuillez réessayer plus tard.
 {str(e)}
         """
         await update.message.reply_text(error_message)
-        logger.error(f"Erreur inattendue: {e}")
+        print(f"❌ Erreur inattendue: {e}")
 
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère la commande /generate avec ou sans argument"""
@@ -201,7 +195,7 @@ async def list_keys_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     except Exception as e:
         await update.message.reply_text(f"❌ Erreur: {str(e)}")
-        logger.error(f"Erreur liste clés: {e}")
+        print(f"❌ Erreur liste clés: {e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère les messages texte"""
@@ -218,7 +212,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère les erreurs"""
-    logger.error(f"Erreur: {context.error}")
+    print(f"❌ Erreur: {context.error}")
     
     if update and update.message:
         await update.message.reply_text(
@@ -244,9 +238,9 @@ def main():
         application.add_error_handler(error_handler)
         
         # Démarrage du bot
-        logger.info("🚀 FatherBot démarré avec succès!")
-        logger.info(f"📍 API Base: {API_BASE_URL}")
-        logger.info(f"🔐 Secret Key: {'*' * len(SECRET_KEY)}")
+        print("🚀 FatherBot démarré avec succès!")
+        print(f"📍 API Base: {API_BASE_URL}")
+        print(f"🔐 Secret Key: {'*' * len(SECRET_KEY)}")
         
         print("=" * 50)
         print("🤖 FatherBot est opérationnel!")
@@ -255,7 +249,7 @@ def main():
         application.run_polling()
         
     except Exception as e:
-        logger.error(f"Erreur critique au démarrage: {e}")
+        print(f"❌ Erreur critique au démarrage: {e}")
         exit(1)
 
 if __name__ == '__main__':

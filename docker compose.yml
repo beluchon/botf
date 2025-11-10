@@ -4,3 +4,7 @@ telegram-bot:
     restart: unless-stopped
     ports:
       - 52707:52707
+    environment:
+      - TELEGRAM_BOT_TOKEN=8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8
+      - SECRET_KEY=testuu
+      - API_BASE_URL=http://172.17.0.1:8082

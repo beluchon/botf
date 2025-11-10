@@ -5,7 +5,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 import asyncio
 
 # 🛠️ Configuration
-TELEGRAM_TOKEN = os.environ.get("8367979038:AAEw7DuWFFK1mBTyHxc0XOh5Q19uq11FYD8")  # Remplacez par votre token
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Remplacez par votre token
 LOCAL_API_URL = "http://localhost:8082"
 
 # ✅ Fonction pour créer un utilisateur
@@ -104,3 +104,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

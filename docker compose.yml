@@ -4,15 +4,3 @@ telegram-bot:
     restart: unless-stopped
     ports:
       - 52707:52707
-    environment:
-      - TELEGRAM_TOKEN=
-      - POSTGRES_DB=zilean
-      - POSTGRES_USER=stremio
-      - POSTGRES_PASSWORD=stremio
-      - POSTGRES_HOST=stremio-postgres
-      - POSTGRES_PORT=5432
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      - stremio-postgres
-      - stremio-redis
